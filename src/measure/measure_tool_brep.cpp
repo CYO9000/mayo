@@ -531,6 +531,37 @@ MeasureDistance MeasureToolBRep::brepMinDistance(
     throwErrorIf<ErrorCode::NotBRepShape>(shape1.IsNull());
     throwErrorIf<ErrorCode::NotBRepShape>(shape2.IsNull());
 
+    // Special case: vertex <-> planar face → measure perpendicular distance
+    const bool shape1IsVertex = (shape1.ShapeType() == TopAbs_VERTEX);
+    const bool shape2IsVertex = (shape2.ShapeType() == TopAbs_VERTEX);
+    const bool shape1IsFace   = (shape1.ShapeType() == TopAbs_FACE);
+    const bool shape2IsFace   = (shape2.ShapeType() == TopAbs_FACE);
+
+    if ((shape1IsVertex && shape2IsFace) || (shape1IsFace && shape2IsVertex)) {
+        const TopoDS_Vertex vertex = TopoDS::Vertex(shape1IsVertex ? shape1 : shape2);
+        const TopoDS_Face   face   = TopoDS::Face  (shape1IsFace   ? shape1 : shape2);
+
+        const BRepAdaptor_Surface surf(face);
+        if (surf.GetType() == GeomAbs_Plane) {
+            const gp_Pln pln = surf.Plane();
+            const gp_Pnt pnt = BRep_Tool::Pnt(vertex);
+
+            // Project the vertex perpendicularly onto the plane
+            double u = 0., v = 0.;
+            ElSLib::Parameters(pln, pnt, u, v);
+            const gp_Pnt footPoint = ElSLib::Value(u, v, pln);
+
+            MeasureDistance distResult;
+            // pnt1 = vertex, pnt2 = foot on plane — regardless of selection order
+            distResult.pnt1  = pnt;
+            distResult.pnt2  = footPoint;
+            distResult.value = pnt.Distance(footPoint) * Quantity_Millimeter;
+            distResult.type  = MeasureDistance::Type::PerpendicularToPlane;
+            return distResult;
+        }
+    }
+
+    // General case: use OpenCascade extrema for minimum distance
     BRepExtrema_DistShapeShape dist;
     try {
         dist.LoadS1(shape1);
