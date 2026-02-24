@@ -301,6 +301,8 @@ void MeasureDisplayDistance::update(const MeasureDisplayConfig& config)
             return "Min Distance";
         case MeasureDistance::Type::CenterToCenter:
             return "Distance";
+        case MeasureDistance::Type::PerpendicularToPlane:
+            return "Perpendicular Distance";
         default:
             return "Distance";
         }
