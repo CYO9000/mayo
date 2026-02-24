@@ -27,7 +27,7 @@ struct MeasureNone {};
 // Measure of a distance between two entities
 struct MeasureDistance {
     enum class Type {
-        None, Mininmum, CenterToCenter
+        None, Mininmum, CenterToCenter, PerpendicularToPlane
     };
 
     // Point on 1st entity from which the distance is measured
