@@ -1,0 +1,77 @@
+name: Build AppImage
+
+on:
+  push:
+    branches: [ develop, main, master ]
+  workflow_dispatch:   # <- ermöglicht manuellen Start per Knopfdruck
+
+jobs:
+  build-appimage:
+    runs-on: ubuntu-20.04   # wichtig: 20.04 für beste Kompatibilität
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            cmake g++ patchelf \
+            qtbase5-dev libqt5svg5-dev libxcb-cursor0 \
+            libocct-data-exchange-dev libocct-draw-dev occt-misc \
+            libtbb2-dev libxi-dev \
+            libassimp-dev
+
+      - name: Build Mayo
+        run: |
+          mkdir build && cd build
+          cmake .. \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_INSTALL_PREFIX=/usr \
+            -DMayo_BuildPluginAssimp=ON
+          cmake --build . --parallel $(nproc)
+
+      - name: Prepare AppDir
+        run: |
+          mkdir -p AppDir/usr/bin
+          mkdir -p AppDir/usr/share/applications
+          mkdir -p AppDir/usr/share/icons/hicolor/256x256/apps
+
+          cp build/mayo AppDir/usr/bin/
+          cp images/appicon_256.png AppDir/usr/share/icons/hicolor/256x256/apps/mayo.png
+
+          cat > AppDir/usr/share/applications/mayo.desktop << EOF
+          [Desktop Entry]
+          Name=Mayo
+          Exec=mayo
+          Icon=mayo
+          Type=Application
+          Categories=Graphics;Engineering;
+          EOF
+
+      - name: Download linuxdeploy
+        run: |
+          wget -q "https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage"
+          wget -q "https://github.com/linuxdeploy/linuxdeploy-plugin-qt/releases/download/continuous/linuxdeploy-plugin-qt-x86_64.AppImage"
+          chmod +x linuxdeploy-x86_64.AppImage linuxdeploy-plugin-qt-x86_64.AppImage
+
+      - name: Build AppImage
+        env:
+          QMAKE: /usr/bin/qmake
+          LD_LIBRARY_PATH: /usr/lib/x86_64-linux-gnu/opencascade:/usr/lib/x86_64-linux-gnu
+        run: |
+          ./linuxdeploy-x86_64.AppImage \
+            --appdir AppDir \
+            --executable AppDir/usr/bin/mayo \
+            --desktop-file AppDir/usr/share/applications/mayo.desktop \
+            --icon-file AppDir/usr/share/icons/hicolor/256x256/apps/mayo.png \
+            --plugin qt \
+            --output appimage
+
+      - name: Upload AppImage as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Mayo-AppImage
+          path: Mayo-*.AppImage
+          retention-days: 30    # 30 Tage verfügbar zum Herunterladen
